@@ -27,14 +27,14 @@ begin
 end
 
 # ╔═╡ 51c42871-4bb7-483d-b6d9-b88529dd3564
-md"# Constraining with the Parameters in the Cahn Hilliard Equation"
+md"# Constraining the Parameters in the Cahn Hilliard Equation"
 
 # ╔═╡ 8ae3c9c8-07a7-493e-9b02-d04cc71fe249
 md"The Cahn Hilliard equation is used to model condensate formation, or liquid-liquid phase separation. In other words, when a liquid droplet forms within another liquid, the dynamics of those two phases (two liquids) can be modeled with this equation. However, it's a fourth order, nonlinear differential equation, so it is very hard to solve. We have implemented a multigrid solver for it in Julia here."
 
 # ╔═╡ 14f4088b-457c-492c-b391-22015a8b9103
 md"
-The equation is really made up of two equations:
+The Cahn Hilliard equation is really made up of two equations:
 ```math
 
 \frac{\delta\phi(x,y,t)}{\delta t} = M \Delta\mu(x,y,t),
@@ -62,13 +62,31 @@ md"
 "
 
 # ╔═╡ 0b1450d5-0409-4fca-a753-9ea5ab1006e8
-md"Light blue is a system without interactions between molecules (i.e., no weaking binding between like molecules). Dark blue is a system with weak interactions that will phase separate to a phase with concentrations $\phi_{S}$ and $\phi_{D}$ in the soluble/dilute and droplet phases, respectively."
+md"*Light blue is a system without interactions between molecules (i.e., no weaking binding between like molecules). Dark blue is a system with weak interactions that will phase separate to a phase with concentrations $\phi_{S}$ and $\phi_{D}$ in the soluble/dilute and droplet phases, respectively.*"
 
 # ╔═╡ fbc006da-ea95-46b8-84de-9022be4d280f
 md"### Changing alpha to change the spinodal point.
-Alpha is a parameter that affects the 'spinodal point' of the system. This determines whether the system preferentially goes to the -1 or +1 phase.
+Alpha is a parameter that affects the 'spinodal point' of the system. This determines whether the system preferentially goes to the -1 or +1 phase. In the graphic below, the third dotted line (right side of the unstable region) represents the spinodal point.
+"
 
+# ╔═╡ 116063dc-0909-422f-bf11-03a647463755
+md"![](https://www.researchgate.net/publication/7796265/figure/fig11/AS:667129992978438@1536067593648/The-homogeneous-part-of-the-free-energy-density-F-as-a-function-of-the-reduced-density-m.png)"
+
+# ╔═╡ 6f57ebee-088d-4462-a850-e9853a3f2e41
+function F_function(x, alpha)
+	return 	(1/4)*(x^4)-(.5*x^2)-(alpha/3)*(x^3)+(alpha*x)
+end
+
+# ╔═╡ 551e38f7-c112-4faf-af18-85213e501c3a
+md"
 Note that F can be shifted to be positive, but this will not change the derivatives and thus the spinodal point."
+
+# ╔═╡ bde71c2a-60b2-48ba-aa2a-251971429bd9
+function quadratic(a,b,c)
+	discr = b^2 - 4*a*c
+	roots = ( (-b + sqrt(discr))/(2a), (-b - sqrt(discr))/(2a) )
+	return maximum(roots)
+end
 
 # ╔═╡ 119827b1-6415-44cb-8d16-4ee1cfe1f5d1
 @bind alpha Slider(-1:0.05:1, default=0) 
@@ -87,41 +105,39 @@ begin
 end
   ╠═╡ =#
 
-# ╔═╡ a8f251bb-e55b-4821-b2f4-2164fd7ad59c
-# plot(x,F, title = "Free Energy Functional", label = "F")
-
-
-# ╔═╡ 6f57ebee-088d-4462-a850-e9853a3f2e41
-function F_function(x, alpha)
-	return 	(1/4)*(x^4)-(.5*x^2)-(alpha/3)*(x^3)+(alpha*x)
-end
-
-# ╔═╡ bde71c2a-60b2-48ba-aa2a-251971429bd9
-function quadratic(a,b,c)
-	discr = b^2 - 4*a*c
-	roots = ( (-b + sqrt(discr))/(2a), (-b - sqrt(discr))/(2a) )
-	return maximum(roots)
-end
-
 # ╔═╡ bcf114fc-fe6a-49b5-8ca0-be6ef9c06635
 #=╠═╡
 begin
 	using Plots.PlotMeasures
 
-	plot(x,[F,dF,ddF], title = "Free Energy Functional and Derivatives \n for alpha = $(alpha)", top_margin = 20px, label = ["F" L"$\frac{dF}{d\phi}$" L"$\frac{d^2F}{d\phi^2}$"],lw=[3 1 1],ls = [:solid :dash :dash],legend = :outertopright, size = (700,400))
+	plot(x,[F,dF,ddF], title = "Free Energy Functional and Derivatives \n for alpha = $(alpha)", top_margin = 20px, label = ["F" L"$\frac{dF}{d\phi}$" L"$\frac{d^2F}{d\phi^2}$"],lw=[5 2 2],ls = [:solid :dash :dash],legend = :outertopright, size = (600,450),legendfontsize=14,color = ["blue" "orange" "green"])
+	
+	# plot(x,F, title = "Free Energy Functional and Derivatives \n for alpha = $(alpha)", top_margin = 20px, label = "F",lw=5,ls = :solid,legend = :outertopright, size = (600,450),legendfontsize=14, color = "blue")
+	
 	ylabel!("Free Energy Functional")
 	xlabel!(L"$\phi$")
 	ylims!(minimum(F), maximum(F))
+	
 	plot!(x, repeat([0], length(x)), color = "grey", label = "", lw = 2, ls = :dash)
-	plot!([quadratic(3, -2*alpha, -1)], [0],seriestype=:scatter, label = "Spinodal point $(round(quadratic(3, -2*alpha, -1), sigdigits=3))")
+	
 	plot!([quadratic(3, -2*alpha, -1),quadratic(3, -2*alpha, -1)], [0,F_function(quadratic(3, -2*alpha, -1), alpha)], arrow = true,label="", color = "black", lw = 3)
+	plot!([quadratic(3, -2*alpha, -1)], [0],seriestype=:scatter, label = L"$\phi_{spinodal}$", color = "blue", markersize = 8)
+	annotate!(quadratic(3, -2*alpha, -1)+.05,.2*(maximum(F)),text("spinodal = \n $(round(quadratic(3, -2*alpha, -1), sigdigits=3))", :red, :left, 10) ,)
 	
 end
   ╠═╡ =#
 
+# ╔═╡ cb1840e4-a8c1-462c-b952-f3bcc44cdcba
+
+
 # ╔═╡ fdab8ce2-9230-43a4-9625-507f734fe39a
 md"
-So a more negative alpha leads to a lower spinodal point, which means that the +1 phase will form at a lower concentration/phi. For example, at alpha = -0.5, phi above 0.434 will lead to formation of the +1 phase. In contrast, alpha = 0.5 needs a phi of at least 0.768 for a condensate to form."
+So a more negative $\alpha$ leads to a lower spinodal point, which means that the +1 phase will form at a lower concentration or $\phi$. For example, at $\alpha$ = -0.5, $\phi$ above 0.434 will lead to formation of the +1 phase. In contrast, $\alpha$ = 0.5 needs a $\phi$ of at least 0.768 for a condensate to form."
+
+# ╔═╡ bd3878da-03fd-410e-b433-fc7329e331b4
+md"### Fitting the spinodal point to our biological system.
+
+We are modeling the [phase separation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7341897/) of a protein complex, CPC, that forms during mitosis to coordinate several components of chromosome segregation, including the spindle assembly checkpoint. It is known that the concentration of CPC inside the condensate is about 8.4uM. Trivedi et al. also found that the concentration of CPC needed to phase separate at a physiological ionic concentration is about 6uM. Thus the spinodal point, or the point at which phase separation occurs, is 6/8.4 = 0.71 (within the range 0 to 1). Converting this to $\phi \in [-1,1]$ gives $\phi_{spinodal} =0.71*2-1= 0.42$. This equates to an $\alpha \approx -0.5$."
 
 # ╔═╡ Cell order:
 # ╟─51c42871-4bb7-483d-b6d9-b88529dd3564
@@ -134,11 +150,14 @@ So a more negative alpha leads to a lower spinodal point, which means that the +
 # ╟─0b1450d5-0409-4fca-a753-9ea5ab1006e8
 # ╟─1e0d077b-93d1-4eb9-a18b-c5634441783f
 # ╟─fbc006da-ea95-46b8-84de-9022be4d280f
-# ╠═119827b1-6415-44cb-8d16-4ee1cfe1f5d1
+# ╟─116063dc-0909-422f-bf11-03a647463755
 # ╟─a80a1194-95cd-49f1-8590-390cd5e31737
-# ╠═c6849a96-3d69-11ef-0933-0fd49936b533
-# ╟─a8f251bb-e55b-4821-b2f4-2164fd7ad59c
-# ╟─6f57ebee-088d-4462-a850-e9853a3f2e41
+# ╠═6f57ebee-088d-4462-a850-e9853a3f2e41
+# ╟─551e38f7-c112-4faf-af18-85213e501c3a
 # ╟─bde71c2a-60b2-48ba-aa2a-251971429bd9
+# ╠═c6849a96-3d69-11ef-0933-0fd49936b533
+# ╠═119827b1-6415-44cb-8d16-4ee1cfe1f5d1
 # ╟─bcf114fc-fe6a-49b5-8ca0-be6ef9c06635
+# ╠═cb1840e4-a8c1-462c-b952-f3bcc44cdcba
 # ╟─fdab8ce2-9230-43a4-9625-507f734fe39a
+# ╟─bd3878da-03fd-410e-b433-fc7329e331b4
