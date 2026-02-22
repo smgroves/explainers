@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Career Network - Curved Timeline</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 30px;
+            max-width: 900px;
+        }
+        
+        h1 {
+            color: #333;
+            margin: 0 0 20px 0;
+            font-size: 28px;
+        }
+        
+        #network-svg {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            display: block;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+        }
+        
+        button.primary {
+            background: #4A90E2;
+        }
+        
+        button.primary:hover {
+            background: #357ABD;
+        }
+        
+        button.secondary {
+            background: #6c757d;
+        }
+        
+        button.secondary:hover {
+            background: #5a6268;
+        }
+        
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            max-width: 400px;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+        }
+        
+        .slider-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .info {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+        }
+        
+        .legend {
+            font-size: 14px;
+            color: #888;
+        }
+        
+        .node-label {
+            pointer-events: none;
+            user-select: none;
+        }
+
+        line {
+            /* stroke: #666;  Dark grey for solid lines */
+            stroke-opacity: 0.8;
+        }
+
+        .links line {
+            stroke-width: 1.5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Career Network - Curved Timeline</h1>
+        
+        <svg id="network-svg" width="800" height="600"></svg>
+        
+        <div class="controls">
+            <button id="next-btn" class="primary">Next Stage →</button>
+            <button id="reset-btn" class="secondary">Reset</button>
+        </div>
+        
+        <div class="info">
+            <div class="legend">
+                <div style="font-weight: 600; margin-bottom: 8px; color: #333;" id="stage-label">Ready to start</div>
+                <div>Blue squares = Career milestones | Red circles = Research topics</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Career positions along a gentle arc
+        const careerPositions = [
+            { id: 'bs', x: 120, y: 400 },
+            { id: 'phd', x: 250, y: 320 },
+            { id: 'internship', x: 400, y: 280 },
+            { id: 'postdoc', x: 550, y: 320 },
+            { id: 'senior', x: 680, y: 400 }
+        ];
+
+        const timelineData = {
+            nodes: [
+                // Career nodes
+                { id: 'bs', label: 'BS\nW&M', type: 'career', startTime: 0, endTime: 100 },
+                { id: 'phd', label: 'PhD\nVanderbilt', type: 'career', startTime: 20, endTime: 100 },
+                { id: 'internship', label: 'Internship\nDecode Health', type: 'career', startTime: 40, endTime: 100 },
+                { id: 'postdoc', label: 'Postdoc\nUVA', type: 'career', startTime: 60, endTime: 100 },
+                { id: 'senior', label: 'Sr Comput.\nBiologist\nNortheastern', type: 'career', startTime: 80, endTime: 100 },
+                
+                // Topics
+                { id: 'topic1a', label: 'Physics', type: 'topic', category: 'Domain', startTime: 5, endTime: 100, careerNode: 'bs' },
+                { id: 'topic1b', label: 'Mathematics', type: 'topic', category: 'Domain', startTime: 5, endTime: 100, careerNode: 'bs' },
+                { id: 'topic1c', label: 'Particle\nPhysics¹', type: 'topic', category: 'Domain', startTime: 10, endTime: 100, careerNode: 'bs' },
+                { id: 'topic1d', label: 'Biophysics', type: 'topic', category: 'Domain', startTime: 12, endTime: 100, careerNode: 'bs' },
+                { id: 'topic1e', label: 'Interactive\nDesign', type: 'topic', category: 'design', startTime: 12, endTime: 100, careerNode: 'bs' },
+                { id: 'topic1f', label: 'Teaching', type: 'topic', category: 'education', startTime: 18, endTime: 100, careerNode: 'phd' },
+
+                { id: 'topic2a', label: 'Cancer\nSystems\nBiology', type: 'topic', category: 'Domain', startTime: 25, endTime: 100, careerNode: 'phd' },
+                { id: 'topic2c', label: 'Cell\nIdentity', type: 'topic', category: 'Domain', startTime: 27, endTime: 100, careerNode: 'phd' },
+                { id: 'topic2d', label: 'Networks', type: 'topic', category: 'analytics', startTime: 27, endTime: 100, careerNode: 'postdoc' },
+                { id: 'topic2e', label: 'Data\nScience', type: 'topic', category: 'analytics', startTime: 27, endTime: 100, careerNode: 'phd' },
+                { id: 'topic2f', label: 'Classic\nML²', type: 'topic', category: 'analytics', startTime: 30, endTime: 100, careerNode: 'phd' },
+                { id: 'topic2g', label: 'Cell\nPlasticity³', type: 'topic', category: 'Domain', startTime: 32, endTime: 100, careerNode: 'phd' },
+                { id: 'topic2h', label: 'Markov\nChains', type: 'topic', category: 'analytics', startTime: 35, endTime: 100, careerNode: 'phd' },
+                { id: 'topic2i', label: 'Mentoring', type: 'topic', category: 'education', startTime: 35, endTime: 100, careerNode: 'phd' },
+
+                { id: 'topic3a', label: 'Feature\nSelection', type: 'topic', category: 'analytics', startTime: 45, endTime: 100, careerNode: 'internship' },
+                { id: 'topic3b', label: 'Data\nVisualization', type: 'topic', category: 'design', startTime: 50, endTime: 100, careerNode: 'internship' },
+
+                { id: 'topic4a', label: 'PDEs', type: 'topic', category: 'analytics', startTime: 65, endTime: 100, careerNode: 'postdoc' },
+                { id: 'topic4b', label: 'Phase\nTransitions', type: 'topic', category: 'analytics', startTime: 70, endTime: 100, careerNode: 'postdoc' },
+                { id: 'topic4c', label: 'Education\nScholar', type: 'topic', category: 'role', startTime: 75, endTime: 100, careerNode: 'postdoc' },
+
+                { id: 'topic5a', label: 'Transformers', type: 'topic', category: 'analytics', startTime: 85, endTime: 100, careerNode: 'senior' },
+                { id: 'topic5b', label: 'Neural\nNetworks', type: 'topic', category: 'analytics', startTime: 90, endTime: 100, careerNode: 'senior' },
+
+            ],
+            links: [
+                // Career to topic connections
+                // BS connections
+                { source: 'bs', target: 'topic1a', startTime: 5 },
+                { source: 'bs', target: 'topic1b', startTime: 5 },
+                { source: 'bs', target: 'topic1c', startTime: 10 },
+                { source: 'bs', target: 'topic1d', startTime: 12 },
+                { source: 'bs', target: 'topic1e', startTime: 12 },
+                { source: 'bs', target: 'topic1f', startTime: 18 },
+                // PhD connections
+                { source: 'phd', target: 'topic1b', startTime: 20 },
+                { source: 'phd', target: 'topic2a', startTime: 25 },
+                { source: 'phd', target: 'topic1f', startTime: 25 },
+                { source: 'phd', target: 'topic2c', startTime: 27 },
+                { source: 'phd', target: 'topic2d', startTime: 27 },
+                { source: 'phd', target: 'topic2e', startTime: 27 },
+                { source: 'phd', target: 'topic2f', startTime: 30 },
+                { source: 'phd', target: 'topic2g', startTime: 32 },
+                { source: 'phd', target: 'topic2h', startTime: 35 },
+                { source: 'phd', target: 'topic2i', startTime: 35 },
+                // internship connections
+                { source: 'internship', target: 'topic2a', startTime: 40 },
+                { source: 'internship', target: 'topic2d', startTime: 40 },
+                { source: 'internship', target: 'topic2e', startTime: 40 },
+
+                { source: 'internship', target: 'topic3a', startTime: 45 },
+                { source: 'internship', target: 'topic3b', startTime: 50 },
+
+                // postdoc connections
+                { source: 'postdoc', target: 'topic1a', startTime: 60 },
+                { source: 'postdoc', target: 'topic2a', startTime: 60 },
+                { source: 'postdoc', target: 'topic1f', startTime: 60 },
+                { source: 'postdoc', target: 'topic2d', startTime: 60 },
+                { source: 'postdoc', target: 'topic2e', startTime: 60 },
+                { source: 'postdoc', target: 'topic2f', startTime: 60 },
+                { source: 'postdoc', target: 'topic2i', startTime: 60 },
+
+                { source: 'postdoc', target: 'topic4a', startTime: 65 },
+                { source: 'postdoc', target: 'topic4b', startTime: 70 },
+                { source: 'postdoc', target: 'topic4c', startTime: 75 },
+                { source: 'topic4c', target: 'topic3b', startTime: 75 },
+
+
+                { source: 'senior', target: 'topic5a', startTime: 85 },
+                { source: 'senior', target: 'topic5b', startTime: 90 },
+                { source: 'senior', target: 'topic2d', startTime: 90 },
+                { source: 'senior', target: 'topic2e', startTime: 90 },
+                { source: 'senior', target: 'topic2g', startTime: 90 },
+                { source: 'senior', target: 'topic2i', startTime: 90 },
+
+
+                
+                // Career progression links
+                { source: 'bs', target: 'phd', startTime: 20 },
+                { source: 'phd', target: 'internship', startTime: 40 },
+                { source: 'internship', target: 'postdoc', startTime: 60 },
+                { source: 'postdoc', target: 'senior', startTime: 80 },
+
+                // Topic to topic connections (add these to your links array)
+
+                // Math/Physics connections
+                { source: 'topic1a', target: 'topic1b', startTime: 10, linkType: 'dotted' }, // Physics ↔ Mathematics
+                { source: 'topic1a', target: 'topic1c', startTime: 12, linkType: 'dotted' }, // Physics ↔ Particle Physics
+                { source: 'topic1b', target: 'topic2h', startTime: 35, linkType: 'dotted' }, // Mathematics ↔ Markov Chains
+                { source: 'topic1b', target: 'topic4a', startTime: 65, linkType: 'dotted' }, // Mathematics ↔ PDEs
+
+                // Biology/Domain connections
+                { source: 'topic1d', target: 'topic2a', startTime: 25, linkType: 'dotted' }, // Biophysics ↔ Cancer Systems Biology
+                { source: 'topic2a', target: 'topic2c', startTime: 27, linkType: 'dotted' }, // Cancer Systems Biology ↔ Cell Identity
+                { source: 'topic2c', target: 'topic2g', startTime: 32, linkType: 'dotted' }, // Cell Identity ↔ Cell Plasticity
+                { source: 'topic2a', target: 'topic2g', startTime: 32, linkType: 'dotted' }, // Cancer Systems Biology ↔ Cell Plasticity
+
+                // Analytics/ML progression
+                { source: 'topic2e', target: 'topic2f', startTime: 30, linkType: 'dotted' }, // Data Science ↔ Classic ML
+                { source: 'topic2f', target: 'topic3a', startTime: 45, linkType: 'dotted' }, // Classic ML ↔ Feature Selection
+                { source: 'topic2f', target: 'topic5b', startTime: 90, linkType: 'dotted' }, // Classic ML ↔ Neural Networks
+                { source: 'topic5b', target: 'topic5a', startTime: 90, linkType: 'dotted' }, // Neural Networks ↔ Transformers
+
+                // Network/Systems thinking
+                { source: 'topic2a', target: 'topic2d', startTime: 27, linkType: 'dotted' }, // Cancer Systems Biology ↔ Networks
+                { source: 'topic2h', target: 'topic4b', startTime: 70, linkType: 'dotted' }, // Markov Chains ↔ Phase Transitions
+
+                // Design/Visualization
+                { source: 'topic1e', target: 'topic3b', startTime: 50, linkType: 'dotted' }, // Interactive Design ↔ Data Visualization
+
+                // Teaching/Education thread
+                { source: 'topic1f', target: 'topic2i', startTime: 35, linkType: 'dotted' }, // Teaching ↔ Mentoring
+                { source: 'topic2i', target: 'topic4c', startTime: 75, linkType: 'dotted' }, // Mentoring ↔ Education Scholar
+
+                // Boost "Networks" - connect to systems thinking and analytics
+                { source: 'topic2d', target: 'topic2h', startTime: 35, linkType: 'dotted' }, // Networks ↔ Markov Chains
+                { source: 'topic2d', target: 'topic4a', startTime: 65, linkType: 'dotted' }, // Networks ↔ PDEs
+                { source: 'topic2d', target: 'topic4b', startTime: 70, linkType: 'dotted' }, // Networks ↔ Phase Transitions
+                { source: 'topic2d', target: 'topic3a', startTime: 45, linkType: 'dotted' }, // Networks ↔ Feature Selection
+
+                // Boost "Data Science" - connect to all analytics/ML
+                { source: 'topic2e', target: 'topic3a', startTime: 45, linkType: 'dotted' }, // Data Science ↔ Feature Selection
+                { source: 'topic2e', target: 'topic3b', startTime: 50, linkType: 'dotted' }, // Data Science ↔ Data Visualization
+                { source: 'topic2e', target: 'topic4a', startTime: 65, linkType: 'dotted' }, // Data Science ↔ PDEs
+                { source: 'topic2e', target: 'topic5a', startTime: 85, linkType: 'dotted' }, // Data Science ↔ Transformers
+                { source: 'topic2e', target: 'topic5b', startTime: 90, linkType: 'dotted' }, // Data Science ↔ Neural Networks
+
+                // Boost "Cancer Systems Biology" - central biology hub
+                { source: 'topic2a', target: 'topic4a', startTime: 65, linkType: 'dotted' }, // Cancer Systems Biology ↔ PDEs (modeling)
+                { source: 'topic2a', target: 'topic4b', startTime: 70, linkType: 'dotted' }, // Cancer Systems Biology ↔ Phase Transitions
+                { source: 'topic2a', target: 'topic2e', startTime: 27, linkType: 'dotted' }, // Cancer Systems Biology ↔ Data Science
+                { source: 'topic2a', target: 'topic2d', startTime: 27, linkType: 'dotted' }, // Cancer Systems Biology ↔ Networks (already suggested above)
+
+                // Boost "Teaching" - connect to all education and mentoring
+                { source: 'topic1f', target: 'topic4c', startTime: 75, linkType: 'dotted' }, // Teaching ↔ Education Scholar
+                { source: 'topic1f', target: 'topic3b', startTime: 50, linkType: 'dotted' }, // Teaching ↔ Data Visualization (pedagogy)
+                { source: 'topic1f', target: 'topic1e', startTime: 18, linkType: 'dotted' }, // Teaching ↔ Interactive Design (pedagogy)
+                // Topic to topic connections
+                // { source: 'topic2', target: 'topic4', startTime: 35 },
+                // { source: 'topic4', target: 'topic5', startTime: 50 },
+                // { source: 'topic5', target: 'topic6', startTime: 55 },
+                // { source: 'topic1', target: 'topic7', startTime: 55 },
+                // { source: 'topic5', target: 'topic8', startTime: 68 },
+                // { source: 'topic6', target: 'topic9', startTime: 72 },
+                // { source: 'topic8', target: 'topic9', startTime: 75 },
+                // { source: 'topic7', target: 'topic10', startTime: 87 },
+                // { source: 'topic8', target: 'topic10', startTime: 88 }
+            ]
+        };
+
+        // SVG setup
+        const svg = d3.select('#network-svg');
+        const width = 800;
+        const height = 600;
+
+
+        // Color scale for topic categories
+        const colorScale = {
+            'analytics': '#B3E0B3',    // Light green
+            'design': '#E1C4E1',       // Light purple
+            'education': '#FFE5B3',    // Light yellow
+            'Domain': '#FFB3B3' ,      // Light pink
+            'role': '#B3D9FF'          // Light blue
+        };
+        // Create groups for links and nodes
+        const linkGroup = svg.append('g').attr('class', 'links');
+        const nodeGroup = svg.append('g').attr('class', 'nodes');
+
+        // State
+        let currentStage = -1; // Start at -1 so first click goes to stage 0
+        let autoProgressTimer = null;
+        const careerStages = [
+            { time: 0, id: 'bs', label: 'Stage 1: BS - Undergrad' },
+            { time: 20, id: 'ms', label: 'Stage 2: MS - Grad School' },
+            { time: 40, id: 'phd', label: 'Stage 3: PhD - Vandy' },
+            { time: 60, id: 'postdoc', label: 'Stage 4: Postdoc - UVA' },
+            { time: 80, id: 'faculty', label: 'Stage 5: Faculty - UVA' }
+        ];
+        let currentTime = -1; // Start before first stage
+
+        // Initialize ALL nodes with proper positions
+        const allNodes = timelineData.nodes.map(n => {
+            if (n.type === 'career') {
+                const pos = careerPositions.find(p => p.id === n.id);
+                return { ...n, x: pos.x, y: pos.y, anchorX: pos.x, anchorY: pos.y, visible: false };
+            } else {
+                // Initialize topic nodes near their career node
+                const careerPos = careerPositions.find(p => p.id === n.careerNode);
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 80 + Math.random() * 40;
+                return { 
+                    ...n, 
+                    x: careerPos.x + Math.cos(angle) * distance, 
+                    y: careerPos.y + Math.sin(angle) * distance,
+                    visible: false 
+                };
+            }
+        });
+
+        const allLinks = timelineData.links.map(l => ({ ...l, visible: false }));
+
+        // Force-directed layout with anchoring for career nodes
+        const simulation = d3.forceSimulation(allNodes)
+            .force('link', d3.forceLink(allLinks).id(d => d.id).distance(150))
+            .force('charge', d3.forceManyBody().strength(-150))
+            .force('collide', d3.forceCollide().radius(d => {
+                if (d.type === 'career') return 45;
+                // Dynamic collision radius for topics based on connections
+                const connections = allLinks.filter(l => 
+                    l.visible && 
+                    ((l.source.id === d.id || l.source === d.id) || 
+                     (l.target.id === d.id || l.target === d.id))
+                ).length;
+                return Math.min(24 + connections * 6, 54) + 5; // radius + padding
+            }))
+            .force('x', d3.forceX().x(d => d.anchorX || width / 2).strength(d => d.type === 'career' ? 0.8 : 0.01))
+            .force('y', d3.forceY().y(d => d.anchorY || height / 2).strength(d => d.type === 'career' ? 0.8 : 0.01))
+            .on('tick', ticked);
+
+        // Update visibility based on current stage and time
+        function updateVisibility() {
+            if (currentStage < 0) {
+                // Nothing visible yet
+                allNodes.forEach(n => n.visible = false);
+                allLinks.forEach(l => l.visible = false);
+                return;
+            }
+            
+            allNodes.forEach(n => {
+                n.visible = n.startTime <= currentTime && n.endTime >= currentTime;
+            });
+            
+            allLinks.forEach(l => {
+                const sourceNode = allNodes.find(n => n.id === l.source.id || n.id === l.source);
+                const targetNode = allNodes.find(n => n.id === l.target.id || n.id === l.target);
+                l.visible = l.startTime <= currentTime && sourceNode?.visible && targetNode?.visible;
+            });
+        }
+        
+        // Auto-progress topics after career node appears
+        function startAutoProgress() {
+            // Stop any existing timer
+            if (autoProgressTimer) {
+                clearInterval(autoProgressTimer);
+            }
+            
+            // Get the end time for this stage
+            const stageEndTime = currentStage < careerStages.length - 1 
+                ? careerStages[currentStage + 1].time - 1  // Stop before next career node
+                : 100;
+            
+            // Gradually increment time to show topics appearing
+            autoProgressTimer = setInterval(() => {
+                if (currentTime < stageEndTime) {
+                    currentTime += 1;
+                    render();
+                } else {
+                    clearInterval(autoProgressTimer);
+                    autoProgressTimer = null;
+                }
+            }, 200); // Topics appear every 200ms
+        }
+
+        // Render function
+        function render() {
+            updateVisibility();
+
+            // Update simulation with visible nodes/links
+            simulation.nodes(allNodes.filter(n => n.visible));
+            simulation.force('link').links(allLinks.filter(l => l.visible));
+            simulation.alpha(0.05).restart();
+
+            // Update links
+            const link = linkGroup.selectAll('line')
+                .data(allLinks.filter(l => l.visible), d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+
+            link.exit()
+                .transition()
+                .duration(500)
+                .attr('stroke-opacity', 0)
+                .remove();
+
+            link.enter()
+                .append('line')
+                .attr('stroke', d => d.linkType === 'dotted' ? '#E0E0E0' : '#333')  // Very light grey vs very dark grey
+                .attr('stroke-dasharray', d => d.linkType === 'dotted' ? '5,5' : '0')
+                .attr('stroke-opacity', 0)
+                .transition()
+                .duration(500)
+                .attr('stroke-opacity', d => d.linkType === 'dotted' ? 0.4 : 0.9);  // Lower opacity for dotted, higher for solid
+
+
+            // Update nodes
+            const node = nodeGroup.selectAll('g')
+                .data(allNodes.filter(n => n.visible), d => d.id);
+
+            const nodeExit = node.exit();
+            nodeExit.transition()
+                .duration(500)
+                .style('opacity', 0)
+                .remove();
+
+            const nodeEnter = node.enter()
+                .append('g')
+                .style('opacity', 0)
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended));
+
+            // Add shapes
+            nodeEnter.filter(d => d.type === 'career')
+                .append('rect')
+                .attr('x', -40)
+                .attr('y', -40)
+                .attr('width', 80)
+                .attr('height', 80)
+                .attr('rx', 8)
+                .attr('fill', '#A8D5FF')
+                .attr('stroke', '#000') //black stroke for better contrast
+                .attr('stroke-width', 1)
+                .attr('font-weight', 'bold');
+
+
+            // nodeEnter.filter(d => d.type === 'topic')
+            //     .append('circle')
+            //     .attr('r', 32)
+            //     .attr('fill', '#FFB3B3')
+            //     .attr('stroke', '#fff')
+            //     .attr('stroke-width', 3);
+            nodeEnter.filter(d => d.type === 'topic')
+            .append('circle')
+            .attr('r', 32)
+            .attr('fill', d => colorScale[d.category] || '#FFB3B3')  // <- Change this line
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 0)
+            .attr('font-weight', 'italic');
+
+
+        // Add labels
+        nodeEnter.append('text')
+            .attr('class', 'node-label')
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#000')
+            .attr('font-size', '11px')
+            .attr('font-weight', d => d.type === 'career' ? 'bold' : 'normal')
+            .attr('font-style', d => d.type === 'topic' ? 'italic' : 'normal')
+            .each(function(d) {
+                const lines = d.label.split('\n');
+                const text = d3.select(this);
+                const lineHeight = 1.2; // em
+                
+                // Calculate offset to center multi-line text
+                const totalHeight = lines.length * lineHeight;
+                const startOffset = -totalHeight / 2 + 0.6; // Center based on number of lines
+                
+                lines.forEach((line, i) => {
+                    text.append('tspan')
+                        .attr('x', 0)
+                        .attr('dy', i === 0 ? `${startOffset}em` : `${lineHeight}em`)
+                        .text(line);
+                });
+            });
+            nodeEnter.transition()
+                .duration(500)
+                .style('opacity', 1);
+
+            updateLabel();
+        }
+
+        // Update positions on every tick
+        function ticked() {
+            // Constrain nodes to stay within the SVG boundaries
+            allNodes.forEach(d => {
+                const radius = d.type === 'career' ? 45 : (Math.min(24 + (allLinks.filter(l => 
+                    l.visible && 
+                    ((l.source.id === d.id || l.source === d.id) || 
+                     (l.target.id === d.id || l.target === d.id))
+                ).length) * 6, 54));
+                
+                d.x = Math.max(radius, Math.min(width - radius, d.x));
+                d.y = Math.max(radius, Math.min(height - radius, d.y));
+            });
+            
+            linkGroup.selectAll('line')
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            nodeGroup.selectAll('g')
+                .attr('transform', d => `translate(${d.x},${d.y})`);
+            
+            // Update topic node sizes based on connections
+            nodeGroup.selectAll('g').filter(d => d.type === 'topic')
+                .select('circle')
+                .transition()
+                .duration(300)
+                .attr('r', d => {
+                const connections = allLinks.filter(l => 
+                    l.visible && 
+                    ((l.source.id === d.id || l.source === d.id) || 
+                     (l.target.id === d.id || l.target === d.id))
+                ).length;
+                
+                // Find max connections in the network
+                const maxConnections = d3.max(allNodes.filter(n => n.visible && n.type === 'topic'), node => {
+                    return allLinks.filter(l => 
+                        l.visible && 
+                        ((l.source.id === node.id || l.source === node.id) || 
+                        (l.target.id === node.id || l.target === node.id))
+                    ).length;
+                }) || 1;
+                
+                // Scale from minSize to maxSize based on relative connectivity
+                const minSize = 5;
+                const maxSize = 50;
+                const scale = d3.scaleLinear()
+                    .domain([1, maxConnections])
+                    .range([minSize, maxSize]);
+                
+                return scale(connections);
+            });
+// Update text size based on connections
+nodeGroup.selectAll('g').filter(d => d.type === 'topic')
+    .select('text')
+    .transition()
+    .duration(300)
+    .attr('font-size', d => {
+        const connections = allLinks.filter(l => 
+            l.visible && 
+            ((l.source.id === d.id || l.source === d.id) || 
+             (l.target.id === d.id || l.target === d.id))
+        ).length;
+        
+        // Scale from 9px to 12px
+        const sizeScale = d3.scaleLinear()
+            .domain([1, 8])
+            .range([9, 16])
+            .clamp(true);
+        
+        return sizeScale(connections) + 'px';
+    });
+                // .attr('r', d => {
+                //     // Count visible connections
+                //     const connections = allLinks.filter(l => 
+                //         l.visible && 
+                //         ((l.source.id === d.id || l.source === d.id) || 
+                //          (l.target.id === d.id || l.target === d.id))
+                //     ).length;
+                //     // Base size 24, add 6px per connection, max 54
+                //     return Math.min(24 + connections * 6, 54);
+                // });
+        }
+
+        // Drag functions
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            // Career nodes snap back to anchor, topics stay free
+            if (d.type === 'career') {
+                d.fx = null;
+                d.fy = null;
+            } else {
+                d.fx = null;
+                d.fy = null;
+            }
+        }
+
+        // Update stage label
+        function updateLabel() {
+            const stageLabel = document.getElementById('stage-label');
+            const nextBtn = document.getElementById('next-btn');
+            
+            if (currentStage < 0) {
+                stageLabel.textContent = 'Ready to start';
+                nextBtn.textContent = 'Start →';
+            } else if (currentStage < careerStages.length) {
+                stageLabel.textContent = careerStages[currentStage].label;
+                nextBtn.textContent = currentStage < careerStages.length - 1 ? 'Next Stage →' : 'Show All Topics →';
+            } else {
+                stageLabel.textContent = 'Complete Timeline';
+                nextBtn.textContent = 'Complete ✓';
+                nextBtn.disabled = true;
+            }
+        }
+
+        // Controls
+        const nextBtn = document.getElementById('next-btn');
+        const resetBtn = document.getElementById('reset-btn');
+
+        nextBtn.addEventListener('click', () => {
+            // Stop any auto-progression
+            if (autoProgressTimer) {
+                clearInterval(autoProgressTimer);
+                autoProgressTimer = null;
+            }
+            
+            if (currentStage < careerStages.length - 1) {
+                // Move to next career stage
+                currentStage++;
+                currentTime = careerStages[currentStage].time;
+                render();
+                // Start auto-showing topics for this stage AFTER the career node appears
+                setTimeout(() => {
+                    startAutoProgress();
+                }, 100);
+            } else if (currentStage === careerStages.length - 1) {
+                // Final stage - show everything
+                currentStage++;
+                currentTime = 100;
+                render();
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            // Stop auto-progression
+            if (autoProgressTimer) {
+                clearInterval(autoProgressTimer);
+                autoProgressTimer = null;
+            }
+            
+            currentStage = -1;
+            currentTime = -1;
+            
+            // Reset positions
+            allNodes.forEach(n => {
+                if (n.type === 'career') {
+                    const pos = careerPositions.find(p => p.id === n.id);
+                    n.x = pos.x;
+                    n.y = pos.y;
+                } else {
+                    const careerPos = careerPositions.find(p => p.id === n.careerNode);
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = 80 + Math.random() * 40;
+                    n.x = careerPos.x + Math.cos(angle) * distance;
+                    n.y = careerPos.y + Math.sin(angle) * distance;
+                }
+                n.fx = null;
+                n.fy = null;
+                n.vx = 0;
+                n.vy = 0;
+            });
+            
+            nextBtn.disabled = false;
+            render();
+        });
+
+        // Initialize
+        render();
+    </script>
+</body>
+</html>
